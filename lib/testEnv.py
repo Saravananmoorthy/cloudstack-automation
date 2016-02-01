@@ -13,8 +13,7 @@ from marvin.configGenerator import ConfigManager
 from marvin import configGenerator
 import Queue
 import threading
-from hostImagerProfiles import resourceManager
-from modifyTestData import modifyTestData
+from hostImager import resourceManager
 
 class testEnv():
 

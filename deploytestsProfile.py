@@ -1,11 +1,14 @@
 #!/usr/local/bin/python2.7
+import os
+import sys
+absPath=os.path.abspath(os.path.dirname(sys.argv[0]))
+sys.path.append(os.path.join(absPath,'lib/'))
+
 from hostResource import hostManager, poolManager
 from testEnv import testEnv
 import logging
-import os
 import bashUtils
 import time
-import sys
 import shutil
 import subprocess
 import xunitparser
@@ -20,6 +23,7 @@ from email.Utils import COMMASPACE, formatdate
 from email import Encoders
 from marvin.sshClient import SshClient as remoteSSHClient
 from optparse import OptionParser
+
 
 infraxen_ip="10.147.28.51"
 infraxen_passwd="password"
