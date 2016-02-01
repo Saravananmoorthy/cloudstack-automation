@@ -1,0 +1,55 @@
+#platform=x86, AMD64, or Intel EM64T
+# System authorization information
+auth  --useshadow  --enablemd5
+# System bootloader configuration
+bootloader --location=mbr
+network --bootproto=dhcp --device=eth0
+# Partition clearing information
+clearpart --all --initlabel
+# Use text mode install
+text
+# Firewall configuration
+firewall --enabled
+# Run the Setup Agent on first boot
+firstboot --disable
+# System keyboard
+keyboard us
+# System language
+lang en_US
+# Use network installation
+url --url=$tree
+# If any cobbler repo definitions were referenced in the kickstart profile, include them here.
+$yum_repo_stanza
+# Network information
+$SNIPPET('network_config')
+# Reboot after installation
+reboot
+
+#Root password
+rootpw password
+# System timezone
+timezone  --utc America/Los_Angeles
+# Install OS instead of upgrade
+install
+
+
+%pre
+$SNIPPET('log_ks_pre')
+$SNIPPET('kickstart_start')
+$SNIPPET('pre_install_network_config')
+# Enable installation monitoring
+$SNIPPET('pre_anamon')
+
+%post
+$SNIPPET('log_ks_post')
+#ntpdate cobblerbvt.automation.test.com
+ntpdate 10.223.90.200
+<post-install-script type="url">
+        http://$server/cblr/aux/citrix/post-install
+</post-install-script>
+
+# Enable post-install boot notification
+$SNIPPET('post_anamon')
+# Start final steps
+$SNIPPET('kickstart_done')
+# End final steps

@@ -1,0 +1,20 @@
+<installation>
+    <primary-disk>sda</primary-disk>
+    <keymap>us</keymap>
+    <root-password>topsecretword</root-password>
+    <source type="url">http://$server/cblr/links/$distro</source>
+    <post-install-script type="url">
+        http://$server/cblr/aux/citrix/post-install
+    </post-install-script>
+    <admin-interface name="eth0" proto="static">
+        #set $nic     = $interfaces["eth0"]
+        #set $ip      = $nic["ip_address"]
+        #set $netmask = $nic["subnet"]
+        <ip>$ip</ip>
+        <subnet-mask>$netmask</subnet-mask>
+        <gateway>$gateway</gateway>
+    </admin-interface>
+    <timezone>UTC</timezone>
+    <hostname>$hostname</hostname>
+</installation>
+

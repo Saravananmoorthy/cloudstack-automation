@@ -1,0 +1,179 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+    <description></description>
+      <keepDependencies>false</keepDependencies>
+        <properties>
+            <hudson.model.ParametersDefinitionProperty>
+                  <parameterDefinitions>
+                          <hudson.model.StringParameterDefinition>
+                                    <name>buildNumber</name>
+                                              <description>the build number for which we want to generate report</description>
+                                                        <defaultValue></defaultValue>
+                                                                </hudson.model.StringParameterDefinition>
+                                                                        <hudson.model.StringParameterDefinition>
+                                                                                  <name>MGMT_SVR</name>
+                                                                                            <description></description>
+                                                                                                      <defaultValue></defaultValue>
+                                                                                                              </hudson.model.StringParameterDefinition>
+                                                                                                                      <hudson.model.StringParameterDefinition>
+                                                                                                                                <name>version</name>
+                                                                                                                                          <description></description>
+                                                                                                                                                    <defaultValue></defaultValue>
+                                                                                                                                                            </hudson.model.StringParameterDefinition>
+                                                                                                                                                                    <hudson.model.StringParameterDefinition>
+                                                                                                                                                                              <name>BASEDIR</name>
+                                                                                                                                                                                        <description></description>
+                                                                                                                                                                                                  <defaultValue></defaultValue>
+                                                                                                                                                                                                          </hudson.model.StringParameterDefinition>
+                                                                                                                                                                                                                </parameterDefinitions>
+                                                                                                                                                                                                                    </hudson.model.ParametersDefinitionProperty>
+                                                                                                                                                                                                                      </properties>
+                                                                                                                                                                                                                        <scm class="hudson.scm.NullSCM"/>
+                                                                                                                                                                                                                          <assignedNode>cobbler-hydTest</assignedNode>
+                                                                                                                                                                                                                            <canRoam>false</canRoam>
+                                                                                                                                                                                                                              <disabled>false</disabled>
+                                                                                                                                                                                                                                <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+                                                                                                                                                                                                                                  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+                                                                                                                                                                                                                                    <authToken>bharat</authToken>
+                                                                                                                                                                                                                                      <triggers class="vector"/>
+                                                                                                                                                                                                                                        <concurrentBuild>false</concurrentBuild>
+                                                                                                                                                                                                                                          <builders>
+                                                                                                                                                                                                                                              <hudson.tasks.Shell>
+                                                                                                                                                                                                                                                    <command>                                                                               
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        set -x
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            SUITE_PATH=&quot;${BASEDIR}&quot;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                mkdir -p $WORKSPACE/reports/
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    rm -rf $WORKSPACE/reports/*
+
+
+for file in `find $SUITE_PATH -name test_*.xml`
+do
+      cp -f $file $WORKSPACE/reports/
+                  suite=`echo $file | sed -e &apos;s/.*reports\///&apos; -e &apos;s/\.xml//g&apos;`
+                                    rm -rf $WORKSPACE/reports/$suite
+                                                            rm -rf $WORKSPACE/reports/$suite.zip
+                                                                                          suite_path=`echo $file | sed -e &apos;s/reports.*//&apos;`
+                                                                                                                              log_folder=`ls -ltr $suite_path| tail -2 | head -1 | awk &apos;{print $9}&apos;`
+                                                                                                                                                                        mkdir -p $WORKSPACE/reports/$suite
+                                                                                                                                                                                                                        cp -f $suite_path/$log_folder/*.* $WORKSPACE/reports/$suite
+                                                                                                                                                                                                                                                                              find $WORKSPACE/reports/$suite -iname *.txt -exec zip -j /$WORKSPACE/reports/${suite}.zip {} \;
+
+done
+
+NFS_SVR=&quot;nfs1.lab.vmops.com&quot;
+PREFIX=&quot;Self_Service_Simulator_&quot;
+NFS_PATH=&quot;/var/www/html/automation/&quot;
+HYP=&quot;simulator&quot;
+
+#create dir on NFS with CS version and hypervisor
+ssh root@$NFS_SVR mkdir -p $NFS_PATH/$version/$HYP
+
+#collect test_run logs for each suite
+rm -rf /tmp/test_run.*
+find $WORKSPACE -iname *.zip -exec zip -j /tmp/test_run.zip {} \;
+scp /tmp/test_run.zip root@${NFS_SVR}:$NFS_PATH/$version/$HYP
+
+#zip $suite.xml into test_results.zip
+rm -rf /tmp/test_results.*
+find $WORKSPACE -iname *.xml -exec zip -j /tmp/test_results.zip {} \;
+scp /tmp/test_results.zip root@${NFS_SVR}:$NFS_PATH/$version/$HYP
+
+#use cloud-bugtool to collect mysqldump, management server logs etc.,
+ssh root@$MGMT_SVR mkdir -p /tmp/management_${buildNumber}/management
+ssh root@$MGMT_SVR cp /automation/cloudstack/vmops.log /tmp/management_${buildNumber}/management/
+ssh root@$MGMT_SVR &quot;pushd /tmp/management_${buildNumber}; zip ${PREFIX}Log_$buildNumber -r management; popd;&quot;
+scp root@$MGMT_SVR:/tmp/management_${buildNumber}/${PREFIX}Log_$buildNumber.zip /tmp/
+scp /tmp/${PREFIX}Log_$buildNumber.zip root@${NFS_SVR}:$NFS_PATH/$version/$HYP
+ssh root@$MGMT_SVR rm -rf /tmp/management_${buildNumber}
+
+
+ssh root@$NFS_SVR zip -rj  $NFS_PATH/$version/$HYP/${PREFIX}Log_$buildNumber.zip $NFS_PATH/$version/$HYP/test_run.zip
+ssh root@$NFS_SVR rm -rf $NFS_PATH/$version/$HYP/test_run.zip 
+ssh root@$NFS_SVR zip -rj $NFS_PATH/$version/$HYP/${PREFIX}Log_$buildNumber.zip $NFS_PATH/$version/$HYP/test_results.zip 
+ssh root@$NFS_SVR rm -rf $NFS_PATH/$version/$HYP/test_results.zip</command>
+    </hudson.tasks.Shell>
+      </builders>
+        <publishers>
+            <hudson.tasks.junit.JUnitResultArchiver>
+                  <testResults>reports/*.xml</testResults>
+                        <keepLongStdio>true</keepLongStdio>
+                              <testDataPublishers/>
+                                  </hudson.tasks.junit.JUnitResultArchiver>
+                                      <hudson.plugins.emailext.ExtendedEmailPublisher>
+                                            <recipientList>bharat.kumar@citrix.com,</recipientList>
+                                                  <configuredTriggers>
+                                                          <hudson.plugins.emailext.plugins.trigger.UnstableTrigger>
+                                                                    <email>
+                                                                                <recipientList>bharat.kumar@citrix.com,</recipientList>
+                                                                                            <subject>$PROJECT_DEFAULT_SUBJECT</subject>
+                                                                                                        <body>$PROJECT_DEFAULT_CONTENT</body>
+                                                                                                                    <sendToDevelopers>true</sendToDevelopers>
+                                                                                                                                <sendToRequester>false</sendToRequester>
+                                                                                                                                            <includeCulprits>false</includeCulprits>
+                                                                                                                                                        <sendToRecipientList>true</sendToRecipientList>
+                                                                                                                                                                  </email>
+                                                                                                                                                                          </hudson.plugins.emailext.plugins.trigger.UnstableTrigger>
+                                                                                                                                                                                  <hudson.plugins.emailext.plugins.trigger.RegressionTrigger>
+                                                                                                                                                                                            <email>
+                                                                                                                                                                                                        <recipientList>bharat.kumar@citrix.com</recipientList>
+                                                                                                                                                                                                                    <subject>$PROJECT_DEFAULT_SUBJECT</subject>
+                                                                                                                                                                                                                                <body>$PROJECT_DEFAULT_CONTENT</body>
+                                                                                                                                                                                                                                            <sendToDevelopers>true</sendToDevelopers>
+                                                                                                                                                                                                                                                        <sendToRequester>false</sendToRequester>
+                                                                                                                                                                                                                                                                    <includeCulprits>false</includeCulprits>
+                                                                                                                                                                                                                                                                                <sendToRecipientList>true</sendToRecipientList>
+                                                                                                                                                                                                                                                                                          </email>
+                                                                                                                                                                                                                                                                                                  </hudson.plugins.emailext.plugins.trigger.RegressionTrigger>
+                                                                                                                                                                                                                                                                                                          <hudson.plugins.emailext.plugins.trigger.StillFailingTrigger>
+                                                                                                                                                                                                                                                                                                                    <email>
+                                                                                                                                                                                                                                                                                                                                <recipientList>bharat.kumar@citrix.com,</recipientList>
+                                                                                                                                                                                                                                                                                                                                            <subject>$PROJECT_DEFAULT_SUBJECT</subject>
+                                                                                                                                                                                                                                                                                                                                                        <body>$PROJECT_DEFAULT_CONTENT</body>
+                                                                                                                                                                                                                                                                                                                                                                    <sendToDevelopers>true</sendToDevelopers>
+                                                                                                                                                                                                                                                                                                                                                                                <sendToRequester>false</sendToRequester>
+                                                                                                                                                                                                                                                                                                                                                                                            <includeCulprits>false</includeCulprits>
+                                                                                                                                                                                                                                                                                                                                                                                                        <sendToRecipientList>true</sendToRecipientList>
+                                                                                                                                                                                                                                                                                                                                                                                                                  </email>
+                                                                                                                                                                                                                                                                                                                                                                                                                          </hudson.plugins.emailext.plugins.trigger.StillFailingTrigger>
+                                                                                                                                                                                                                                                                                                                                                                                                                                  <hudson.plugins.emailext.plugins.trigger.SuccessTrigger>
+                                                                                                                                                                                                                                                                                                                                                                                                                                            <email>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                        <recipientList>bharat.kumar@citrix.com,</recipientList>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <subject>$PROJECT_DEFAULT_SUBJECT</subject>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <body>$PROJECT_DEFAULT_CONTENT</body>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <sendToDevelopers>true</sendToDevelopers>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <sendToRequester>false</sendToRequester>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <includeCulprits>false</includeCulprits>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <sendToRecipientList>true</sendToRecipientList>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          </email>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  </hudson.plugins.emailext.plugins.trigger.SuccessTrigger>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        </configuredTriggers>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              <contentType>text/html</contentType>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <defaultSubject>Simulator test results. build_number=${ENV, var=&quot;buildNumber&quot;}</defaultSubject>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          <defaultContent>DETAILED REPORT AT http://jenkins-ccp.citrix.com/job/${ENV,var=&quot;JOB_NAME&quot;}/${BUILD_NUMBER}/testReport/
+
+
+
+${JELLY_SCRIPT,template=&quot;static-analysis-auto&quot;}</defaultContent>
+      <attachmentsPattern></attachmentsPattern>
+            <presendScript></presendScript>
+                </hudson.plugins.emailext.ExtendedEmailPublisher>
+                    <hudson.plugins.parameterizedtrigger.BuildTrigger>
+                          <configs>
+                                  <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+                                            <configs>
+                                                        <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+                                                                      <properties>BASEDIR=$WORKSPACE
+                                                                      jobName=${env.JOB_NAME}
+                                                                      </properties>
+                                                                                  </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+                                                                                            </configs>
+                                                                                                      <projects>writeJobCompleteNotification, </projects>
+                                                                                                                <condition>ALWAYS</condition>
+                                                                                                                          <triggerWithNoParameters>false</triggerWithNoParameters>
+                                                                                                                                  </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+                                                                                                                                        </configs>
+                                                                                                                                            </hudson.plugins.parameterizedtrigger.BuildTrigger>
+                                                                                                                                              </publishers>
+                                                                                                                                                <buildWrappers/>
+                                                                                                                                                </project>

@@ -1,0 +1,41 @@
+options {
+          listen-on port 53 { 172.16.88.7; localhost; 10.223.255.198;};
+          directory       "/var/named";
+          dump-file       "/var/named/data/cache_dump.db";
+          statistics-file "/var/named/data/named_stats.txt";
+          memstatistics-file "/var/named/data/named_mem_stats.txt";
+          allow-query     { any; };
+          recursion yes;
+          forwarders { 10.223.240.232; };
+          forward first;
+};
+
+logging {
+        channel default_debug {
+                file "data/named.run";
+                severity dynamic;
+        };
+};
+
+#for $zone in $forward_zones
+zone "${zone}." {
+    type master;
+    file "$zone";
+    allow-transfer { 172.16.88.8; }; 
+    allow-update { any; };
+    notify yes;
+    also-notify { 172.16.88.8; };
+};
+
+#end for
+#for $zone, $arpa in $reverse_zones
+zone "${arpa}." {
+    type master;
+    file "$zone";
+    allow-transfer { 172.16.88.8; };
+    allow-update { any; };
+    notify yes;
+    also-notify { 172.16.88.8; };
+};
+
+#end for

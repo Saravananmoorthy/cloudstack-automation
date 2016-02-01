@@ -1,0 +1,18 @@
+<installation mode="fresh" srtype="lvm">
+<primary-disk gueststorage="yes">sda</primary-disk>
+<keymap>us</keymap>
+<hostname>${hostname}</hostname>
+<root-password>password</root-password>
+<source type="url">http://$server/cblr/links/$distro</source>
+<post-install-script type="url">
+http://$server/cblr/aux/citrix/post-install 
+</post-install-script>
+<admin-interface name="eth0" proto="static">
+<ip>${ip_address_} </ip>
+<subnet-mask>${netmask_}</subnet-mask>
+<gateway>${gateway}</gateway>
+</admin-interface>
+<nameserver>172.16.88.7</nameserver>
+ <hostname>${dns_name_}</hostname>
+<timezone>Asia/Calcutta</timezone>
+</installation>
