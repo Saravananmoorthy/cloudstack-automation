@@ -1,1 +1,1 @@
-/usr/local/bin/python2.7 /root/cloud-autodeploy2/newcode/jenkinsGarbageCollector.py
+/usr/local/bin/python2.7 /root/cloud-autodeploy2/newcode/garbageCollector.py
