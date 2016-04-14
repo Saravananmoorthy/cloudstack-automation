@@ -1,0 +1,66 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+    <description>		</description>
+      <keepDependencies>false</keepDependencies>
+        <properties>
+            <com.sonyericsson.rebuild.RebuildSettings plugin="rebuild@1.21">
+                  <autoRebuild>false</autoRebuild>
+                      </com.sonyericsson.rebuild.RebuildSettings>
+                          <jenkins.plugins.slack.SlackNotifier_-SlackJobProperty plugin="slack@1.7">
+                                <teamDomain></teamDomain>
+                                      <token></token>
+                                            <room></room>
+                                                  <startNotification>false</startNotification>
+                                                        <notifySuccess>true</notifySuccess>
+                                                              <notifyAborted>false</notifyAborted>
+                                                                    <notifyNotBuilt>false</notifyNotBuilt>
+                                                                          <notifyUnstable>false</notifyUnstable>
+                                                                                <notifyFailure>true</notifyFailure>
+                                                                                      <notifyBackToNormal>false</notifyBackToNormal>
+                                                                                            <notifyRepeatedFailure>false</notifyRepeatedFailure>
+                                                                                                  <includeTestSummary>false</includeTestSummary>
+                                                                                                        <showCommitList>false</showCommitList>
+                                                                                                            </jenkins.plugins.slack.SlackNotifier_-SlackJobProperty>
+                                                                                                                <hudson.plugins.throttleconcurrents.ThrottleJobProperty plugin="throttle-concurrents@1.8.2">
+                                                                                                                      <maxConcurrentPerNode>0</maxConcurrentPerNode>
+                                                                                                                            <maxConcurrentTotal>0</maxConcurrentTotal>
+                                                                                                                                  <throttleEnabled>false</throttleEnabled>
+                                                                                                                                        <throttleOption>project</throttleOption>
+                                                                                                                                            </hudson.plugins.throttleconcurrents.ThrottleJobProperty>
+                                                                                                                                              </properties>
+                                                                                                                                                <scm class="hudson.scm.NullSCM"/>
+                                                                                                                                                  <assignedNode>cobbler-hyd</assignedNode>
+                                                                                                                                                    <canRoam>false</canRoam>
+                                                                                                                                                      <disabled>true</disabled>
+                                                                                                                                                        <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+                                                                                                                                                          <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+                                                                                                                                                            <triggers>
+                                                                                                                                                                <hudson.triggers.TimerTrigger>
+                                                                                                                                                                      <spec>H  0-23/6 * * *</spec>
+                                                                                                                                                                          </hudson.triggers.TimerTrigger>
+                                                                                                                                                                            </triggers>
+                                                                                                                                                                              <concurrentBuild>true</concurrentBuild>
+                                                                                                                                                                                <builders>
+                                                                                                                                                                                    <hudson.plugins.parameterizedtrigger.TriggerBuilder plugin="parameterized-trigger@2.17">
+                                                                                                                                                                                          <configs>
+                                                                                                                                                                                                  <hudson.plugins.parameterizedtrigger.BlockableBuildTriggerConfig>
+                                                                                                                                                                                                            <configs class="empty-list"/>
+                                                                                                                                                                                                                      <projects>Deployandtestcommunity</projects>
+                                                                                                                                                                                                                                <condition>ALWAYS</condition>
+                                                                                                                                                                                                                                          <triggerWithNoParameters>false</triggerWithNoParameters>
+                                                                                                                                                                                                                                                    <buildAllNodesWithLabel>false</buildAllNodesWithLabel>
+                                                                                                                                                                                                                                                            </hudson.plugins.parameterizedtrigger.BlockableBuildTriggerConfig>
+                                                                                                                                                                                                                                                                  </configs>
+                                                                                                                                                                                                                                                                      </hudson.plugins.parameterizedtrigger.TriggerBuilder>
+                                                                                                                                                                                                                                                                        </builders>
+                                                                                                                                                                                                                                                                          <publishers>
+                                                                                                                                                                                                                                                                              <jenkins.plugins.slack.SlackNotifier plugin="slack@1.7">
+                                                                                                                                                                                                                                                                                    <teamDomain>ccp-dev</teamDomain>
+                                                                                                                                                                                                                                                                                          <authToken>NrX0ZZyeMTUMiuwJOWnsXhso</authToken>
+                                                                                                                                                                                                                                                                                                <buildServerUrl>http://jenkins-ccp.citrix.com/</buildServerUrl>
+                                                                                                                                                                                                                                                                                                      <room>#jenkins</room>
+                                                                                                                                                                                                                                                                                                          </jenkins.plugins.slack.SlackNotifier>
+                                                                                                                                                                                                                                                                                                            </publishers>
+                                                                                                                                                                                                                                                                                                              <buildWrappers/>
+                                                                                                                                                                                                                                                                                                              </project>
