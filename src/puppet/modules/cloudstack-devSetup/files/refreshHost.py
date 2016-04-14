@@ -31,11 +31,14 @@ def parse_options():
                           default=False, dest="noSimulator",
                           help="will not buid sumulator if set to true")
 
+        parser.add_option("-P","--githubPrno", action="store",
+                          default=None, dest="githubPrno",
+                          help="git hub pr number")
         (options,args) = parser.parse_args()
         options.package=parseBoolOpts(options.package)
         options.noSimulator=parseBoolOpts(options.noSimulator)
  
-        return {"branch":options.branch_no,"commit":options.commit_id,"hostname":options.hostname,"package":options.package,"skipTests":options.skipTests,"noSimulator":options.noSimulator}
+        return {"branch":options.branch_no,"commit":options.commit_id,"hostname":options.hostname,"package":options.package,"skipTests":options.skipTests,"noSimulator":options.noSimulator,"githubPrno":options.githubPrno}
     except Exception, e:
         print "\nException Occurred %s. Please Check" %(e)
         return codes['FAILED']
@@ -101,16 +104,42 @@ def buildNoSimulator(inp_dict,retryBuild):
         return 1 
     return 0
 
+def sendError(message):
+    os.system("echo '%s' 1>&2"%message)
+    sys.exit(1)
+ 
 def getCSCode(inp_dict):
     os.chdir("/automation/cloudstack")
     os.system("killall -9 java")
     time.sleep(20)
     print "inp_dict",  inp_dict
-    if os.system("git checkout -b temp_branch")!=0:
-       os.system("git checkout temp_branch")
-    os.system("git branch -D %s"%inp_dict['branch'])
-    os.system("git fetch origin %s"%inp_dict['branch'])
-    os.system("git checkout -b %s FETCH_HEAD"%inp_dict['branch'])
+    if os.system("git checkout temp_branch")!=0:
+       os.system("git checkout -b temp_branch")
+
+    print ("cleaning if there are any local uncommited changes")
+    os.system("git reset --hard")
+    os.system("git clean -fdx")
+
+    if(not inp_dict['githubPrno'] is None):
+       os.system("git branch -D %s"%inp_dict['githubPrno'])
+       os.system("git fetch origin pull/%s/head:%s"%(inp_dict['githubPrno'],inp_dict['githubPrno']))
+       success=os.system("git checkout %s"%(inp_dict['githubPrno']))
+       if(success !=0):
+          message='failed to checkout prno %s'%inp_dict['githubPrno']
+          sendError(message)
+       os.system("git branch -D master")
+       success=os.system("echo 'git fetch origin master' 1>&2")
+       if(success !=0):
+         sendError("git fetch master failed")
+       os.system("git checkout -b master FETCH_HEAD")
+       success=os.system("git merge %s"%inp_dict['githubPrno'])
+       if(success !=0):
+           message="git merge with master failed merge_branch:%s"%inp_dict['githubPrno']
+           sendError(message)
+    else:
+       os.system("git branch -D %s"%inp_dict['branch'])
+       os.system("git fetch origin %s"%inp_dict['branch'])
+       os.system("git checkout -b %s FETCH_HEAD"%inp_dict['branch'])
     if (inp_dict['commit'] !=""):
        os.system("git reset --hard %s"%inp_dict['commit'])
     commit_id=output=subprocess.Popen("git log | grep -m 1 'commit' | cut -f 2 -d ' '", stdout=subprocess.PIPE, shell=True).communicate()[0].replace('\n','')
@@ -127,6 +156,8 @@ def getCSCode(inp_dict):
 
     #flushing vmops.log
     os.system("echo > /automation/cloudstack/vmops.log")
+    #adding vhd-utils to repo
+    os.system("cp /root/vhd-util /automation/cloudstack/scripts/vm/hypervisor/xenserver/")
     if (inp_dict['noSimulator']):
         result=buildNoSimulator(inp_dict,retryBuild=2)
     else:

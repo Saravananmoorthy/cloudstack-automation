@@ -30,12 +30,17 @@ def parse_options():
         parser.add_option("-k","--noSimulator", action="store",
                           default=False, dest="noSimulator",
                           help="will not buid sumulator if set to true")
-
+        parser.add_option("-o","--buildOffline", action="store",
+                          default=False, dest="buildOffline",
+                          help="will force maven to build offline")
+        parser.add_option("","--githubPrno", action="store",
+                          default=None, dest="githubPrno",
+                          help="git hub pr number")
         (options,args) = parser.parse_args()
         options.package=parseBoolOpts(options.package)
         options.noSimulator=parseBoolOpts(options.noSimulator)       
      
-        return {"repo_url":options.repo_url,"branch":options.branch_no,"commit":options.commit_id,"hostname":options.hostname, "skipTests":options.skipTests, "package":options.package,"noSimulator":options.noSimulator}
+        return {"repo_url":options.repo_url,"branch":options.branch_no,"commit":options.commit_id,"hostname":options.hostname, "skipTests":options.skipTests, "package":options.package,"noSimulator":options.noSimulator,"buildOffline":options.buildOffline,"githubPrno":options.githubPrno}
     except Exception, e:
         print "\nException Occurred %s. Please Check" %(e)
         return codes['FAILED']
@@ -71,7 +76,7 @@ def buildSimulator(inp_dict,retryBuild):
     print "building simulator"
     while (out!=0 and retryBuild!=0):
           try:
-              out=execCmd("mvn clean install -P developer,systemvm -Dsimulator %s"%("-DskipTests" if inp_dict['skipTests'] else ""))
+              out=execCmd("mvn clean install -P developer,systemvm -Dsimulator %s %s"%("-DskipTests" if inp_dict['skipTests'] else "", "-o" if inp_dict['buildOffline'] else ""))
           except Exception, e:
                  print ("mvn clean  install failed, will retry")
                  print e
@@ -80,8 +85,7 @@ def buildSimulator(inp_dict,retryBuild):
     if out!=0:
        return 1 
     try:
-        execCmd("mvn -Pdeveloper -pl developer -Ddeploydb %s"%("-DskipTests" if inp_dict['skipTests'] else ""))
-        os.system("mvn -Pdeveloper -pl developer -Ddeploydb-simulator %s"%("-DskipTests" if inp_dict['skipTests'] else ""))
+        execCmd("mvn -Pdeveloper -pl developer -Ddeploydb %s %s"%("-DskipTests" if inp_dict['skipTests'] else "", "-o" if inp_dict['buildOffline'] else ""))
     except Exception, e:
         print "****************************Deploydb Failed********************"
         print e
@@ -93,7 +97,7 @@ def buildNoSimulator(inp_dict,retryBuild):
     print "will not build simulator"
     while (out!=0 and retryBuild!=0):
           try:
-              out=execCmd("mvn clean install -P developer,systemvm  %s"%("-DskipTests" if inp_dict['skipTests'] else ""))
+              out=execCmd("mvn clean install -P developer,systemvm  %s %s"%("-DskipTests" if inp_dict['skipTests'] else "","-o" if inp_dict['buildOffline'] else ""))
           except Exception, e:
                  print ("mvn clean  install failed, will retry")
                  print e
@@ -102,7 +106,7 @@ def buildNoSimulator(inp_dict,retryBuild):
     if out!=0:
        return 1 
     try:
-        execCmd("mvn -Pdeveloper -pl developer -Ddeploydb %s"%("-DskipTests" if inp_dict['skipTests'] else ""))
+        execCmd("mvn -Pdeveloper -pl developer -Ddeploydb %s %s"%("-DskipTests" if inp_dict['skipTests'] else "","-o" if inp_dict['buildOffline'] else ""))
     except Exception, e:
         print "****************************Deploydb Failed********************"
         print e
@@ -114,10 +118,27 @@ def getCSCode(inp_dict):
     os.system("mkdir -p /automation/cloudstack")
     os.system("git clone %s /automation/cloudstack"%repo_url)
     os.chdir("/automation/cloudstack")
-    os.system("git fetch origin %s"%inp_dict['branch'])
-    print ("cleaning if there are any local uncommited changes")
-    os.system("git reset --hard")
-    os.system("git checkout -b %s FETCH_HEAD"%(inp_dict['branch']))
+    if(not inp_dict['githubPrno'] is None):
+       os.system("git fetch origin pull/%s/head:%s"%(inp_dict['githubPrno'],inp_dict['githubPrno']))
+       print ("cleaning if there are any local uncommited changes")
+       os.system("git reset --hard")
+       success=os.system("git checkout %s"%(inp_dict['githubPrno']))
+       if(success !=0):
+          echo "failed to checkout prno %s"%inp_dict['githubPrno'] > &2
+       os.system("git branch -D master")
+       success=os.system("echo 'git fetch origin master' 1>&2")
+       if(success !=0):
+         os.system("echo 'git fetch master failed' 1>&2")     
+       os.system("git checkout -b master FETCH_HEAD")
+       success=os.system("git merge %s"%inp_dict['githubPrno'])
+       if(success !=0):
+           message="git merge with master failed merge_branch:%s"%inp_dict['githubPrno']
+           os.system("echo '%s'1>&2"%message)
+    else:
+       os.system("git fetch origin %s"%inp_dict['branch'])
+       print ("cleaning if there are any local uncommited changes")
+       os.system("git reset --hard")
+       os.system("git checkout -b %s FETCH_HEAD"%(inp_dict['branch']))
     os.system("sed -iv 's/download.cloud.com/10.147.28.7/g' /automation/cloudstack/setup/db/templates.sql")
     print ("altered the download url for built in templates.")
     os.system ("killall -9 java")
@@ -126,14 +147,15 @@ def getCSCode(inp_dict):
     os.system("cp /root/vhd-util /automation/cloudstack/scripts/vm/hypervisor/xenserver/")
     os.system("mysql -uroot  -e \"GRANT ALL PRIVILEGES ON *.* TO 'root'@\'%s\' WITH GRANT OPTION \""%(inp_dict['hostname']))
      
-    if (inp_dict['noSimulator']):
+    '''if (inp_dict['noSimulator']):
        success=os.system("sh /root/secseeder.sh > secseeder.log 2>&1")
        if (success !=0 ): 
            print "system vm template seeding failed"
-           return 1 
+           return 1''' 
     
     #if pakage is true it is kvm, we need to pacakage kvm agent, the packaging takes care of building cloudstack.
-    if (inp_dict['noSimulator'] and str(inp_dict['package']).lower == "false"):
+    print inp_dict
+    if (inp_dict['noSimulator'] and not inp_dict['package']):
         result=buildNoSimulator(inp_dict,retryBuild=2)
     else:
         result=buildSimulator(inp_dict,retryBuild=2)
@@ -142,7 +164,7 @@ def getCSCode(inp_dict):
     #open port 8096 for marvin integration tests.
     execCmd("mysql -ucloud -pcloud -Dcloud -e\"update configuration set value=8096 where name like 'integr%'\"") 
 
-    if (str(inp_dict['package']).lower == "false"):
+    if (str(inp_dict['package']).lower == "true"):
        os.chdir('/automation/cloudstack/packaging/centos63/')
        try:
           os.system('sh package.sh')
@@ -150,11 +172,11 @@ def getCSCode(inp_dict):
           print e
           return 1
        os.chdir('/automation/cloudstack')
-    if (inp_dict['noSimulator']):
-       os.system("mvn -pl client jetty:run &")
-    else:
-       os.system("mvn -Dsimulator -pl client jetty:run &")
-    return 0 
+    #if (inp_dict['noSimulator']):
+       #os.system("mvn -pl client jetty:run &")
+    #else:
+       #os.system("mvn -Dsimulator -pl client jetty:run &")
+    #return 0 
 
 def main():
      ret = init()
