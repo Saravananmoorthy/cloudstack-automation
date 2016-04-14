@@ -27,6 +27,9 @@ class hostImager():
           self.hostClusterMap={'xenserver':[],'kvm':[],'vmware':[]}
           self.logger=logging.getLogger("hostImager")
           self.json_config={}
+          self.mountPt="/tmp/" + ''.join([random.choice(string.ascii_uppercase) for x in xrange(0, 10)])
+          bash("mkdir -p %s"%self.mountPt)
+
 
       def initLogging(self,logFile=None, lvl=logging.INFO):
         try:
@@ -40,13 +43,13 @@ class hostImager():
                                 (%(threadName)s) - %(levelname)s - %(message)s'")
         except:
            logging.basicConfig(level=lvl)
- 
+
       def getcobblerprofile(self,hypervisorType):
           return self.profileMap[hypervisorType.lower()]
 
       def refreshHosts(self,cscfg, static=True):
             """
-            Removes cobbler system from previous run. 
+            Removes cobbler system from previous run.
             Creates a new system for current run.
             Ipmi boots from PXE - default to Xenserver profile
             """
@@ -60,7 +63,7 @@ class hostImager():
                               if cluster.hypervisor.lower()=="simulator":
                                  self.logger.info("found simulator host, no need to  refresh")
                                  continue
-                                        
+
                               self.logger.info("attempting to refresh host %s"%hostname)
                               #revoke certs
                               bash("puppet cert clean %s"%(hostname))
@@ -81,7 +84,7 @@ class hostImager():
                                      netmask=staticHostInfo['netmask']
                                      gateway=staticHostInfo['gateway']
                                   if (hostmac==None):
-                                     raise Exception('no host machine avilable') 
+                                     raise Exception('no host machine avilable')
                                   if (hostip==None):
                                      raise Exception('ips not avilable')
 
@@ -100,8 +103,8 @@ class hostImager():
                                        --enable-gpxe=no --profile=%s --ip-address=%s --netmask=%s --gateway=%s %s"%(hostname, hostname, hostname, hostmac,\
                                             hostprofile, hostip, netmask, gateway, "--template-files=%s"%templateFiles if cluster.hypervisor.lower()=="kvm" else ""))
                                   #bash("cobbler sync")
-                              except Exception, e:
-                                     self.logger.error(e)
+                              except Exception as e:
+                                     self.logger.exception(e)
                                      sys.exit(2)
                                      #set ipmi to boot from PXE
                               try:
@@ -121,12 +124,12 @@ class hostImager():
                           if (cluster.hypervisor.lower() != 'simulator'):
                              self.hostClusterMap[cluster.hypervisor.lower()].append(hostsInCluster)
                              self.logger.info("host cluster map %s"%self.hostClusterMap)
-                          #print self.hostClusterMap   
+                          #print self.hostClusterMap
 
       def addPuppetConfig(self,hostinfo):
           if hostinfo['host_type'].lower()=="kvm":
-             #add this node to nodes.pp of puppet 
-             bash(("echo \"node '%s' inherits basenode {\ninclude nfsclient \ninclude kvm-agent }\" >> /etc/puppet/manifests/nodes.pp"%(hostinfo['hostname']))); 
+             #add this node to nodes.pp of puppet
+             bash(("echo \"node '%s' inherits basenode {\ninclude nfsclient \ninclude kvm-agent }\" >> /etc/puppet/manifests/nodes.pp"%(hostinfo['hostname'])));
 
       def prepareKVMHost(self,mgmtHostInfo,hypervisor):
           self.logger.info("preparing kvm host %s"%hypervisor['hostname'])
@@ -137,15 +140,15 @@ class hostImager():
           scp.put("/etc/puppet/modules/kvm-agent/files/authorized_keys","/root/.ssh/")
           mgmtSsh=remoteSSHClient(mgmtHostInfo['ip'], 22, "root", mgmtHostInfo['password'])
           self.logger.info("copying the cloudstack rpms to kvm host")
-          bash("scp -r -q -o StrictHostKeyChecking=no  /etc/puppet/modules/kvm-agent root@%s:/root"%hypervisor['ip']) 
+          bash("scp -r -q -o StrictHostKeyChecking=no  /etc/puppet/modules/kvm-agent root@%s:/root"%hypervisor['ip'])
           kvmSsh=remoteSSHClient(hypervisor['ip'], 22, "root", hypervisor['password'])
           kvmSsh.execute("mkdir /tmp/cloudstack")
           mgmtSsh.execute("scp -r -q -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa.mgmt /root/cloudstack-repo/*  root@%s:/tmp/cloudstack"%hypervisor['ip'])
           kvmSsh.execute("puppet apply --debug --modulepath=/root -e 'include kvm-agent' >> puppetRun.log  2>&1")
-          kvmSsh.close() 
+          kvmSsh.close()
           mgmtSsh.close()
           self.logger.info("kicked off puppet install of kvm")
- 
+
 
       def createXenPools(self,xenHostClusterList):
           for hostList in xenHostClusterList:
@@ -153,14 +156,14 @@ class hostImager():
                     hostssh=remoteSSHClient(hostInfo['ip'], 22, "root", hostInfo['password'])
                     hostssh.execute("xe pool-join master-address=%s master-username='%s'  master-password='%s'"%(hostList[0]['hostname'],'root',hostList[0]['password']))
                     hostssh.close()
-       
+
       def mkdirs(self,path):
           dir = bash("mkdir -p %s" % path)
 
       def pacakageIfKVM(self):
           for hypervisor in self.hypervisorInfo:
               if hypervisor['host_type'].lower()=="kvm":
-                 return True 
+                 return True
           return False
 
       def addProxyInfoToHosts(self):
@@ -169,7 +172,7 @@ class hostImager():
               hostssh=remoteSSHClient(hypervisor['ip'], 22, "root", hypervisor['password'])
               hostssh.execute('echo "export http_proxy=http://172.16.88.5:3128" >> /root/.bashrc')
               hostssh.close()
- 
+
       def execPostInstallHooks(self,mgmtHostInfo):
           for hypervisor in self.hypervisorInfo:
               if hypervisor['host_type'].lower() == "kvm":
@@ -178,7 +181,7 @@ class hostImager():
                     pass
               elif hypervisor['host_type'].lower() == "xenserver":
                    self.createXenPools(self.hostClusterMap['xenserver'])
-      
+
       def seedSecondaryStorage(self,cscfg,hostInfo):
           """
           erase secondary store and seed system VM template via puppet. The
@@ -187,6 +190,11 @@ class hostImager():
           """
           mgmt_server = cscfg.mgtSvr[0].mgtSvrIp
           #hypervisors = ["xen","kvm","vmware"]
+          ssh = SSHClient()
+          ssh.set_missing_host_key_policy(AutoAddPolicy())
+          ssh.connect(hostname=hostInfo['ip'],username="root",password=hostInfo['password'])
+          scp = SCPClient(ssh.get_transport())
+
           for zone in cscfg.zones:
                for pod in zone.pods:
                   for cluster in pod.clusters:
@@ -200,6 +208,7 @@ class hostImager():
                            shost = urlparse.urlsplit(sstor.url).hostname
                            spath = urlparse.urlsplit(sstor.url).path
                            spath = ''.join([shost, ':', spath])
+                           self.createStorageDirs(sstor)
                            #for h in hypervisors:
                            self.logger.info("adding template seeding commands to seed %s systemvm template on %s"%(hypervisor, spath))
                            #self.logger.info("seeding from url %s"%self.resourceMgr.getSystemVMdownloadUrl(hostInfo['branch'],cluster.hypervisor.lower()))
@@ -207,18 +216,28 @@ class hostImager():
           try:
               if (os.path.exists("/tmp/secseeder.%s.sh"%(hostInfo['ip']))):
                  bash("chmod +x /tmp/secseeder.%s.sh"%(hostInfo['ip']))
-                 ssh = SSHClient()
-                 ssh.set_missing_host_key_policy(AutoAddPolicy())
-                 ssh.connect(hostname=hostInfo['ip'],username="root",password=hostInfo['password'])
-                 scp = SCPClient(ssh.get_transport())
                  scp.put("/tmp/secseeder.%s.sh"%(hostInfo['ip']),"/root/secseeder.sh")
                  bash("rm -f /tmp/secseeder.%s.sh"%hostInfo['ip'])
-          except Exception, e:
-                 self.logger.error(e)
+          except Exception as e:
+                 self.logger.exception(e)
                  raise
 
+      def cleanMount(self):
+          bash("umount %s"%self.mountPt)
+
+      def createStorageDirs(self,sstor):
+          self.logger.info("mount -t nfs %s %s"%("/".join(sstor.url.replace("nfs://","").split("/")[:2]),self.mountPt))
+          mount=bash("mount -t nfs %s %s"%("/".join(sstor.url.replace("nfs://","").split("/")[:2]),self.mountPt))
+          if(not mount.isSuccess()):
+             self.logger.error("failed to mount %s"%mount.getStderr())
+          path = urlparse.urlsplit(sstor.url).path
+          self.logger.debug("path %s"%path)
+          relativePath=path.replace(path.split("/")[1],self.mountPt)
+          self.logger.info("mkdir -p %s"%relativePath)
+          bash("mkdir -p %s"%relativePath)
+          self.cleanMount()
+
       def seedBuiltinTemplates(self):
-          ssh=remoteSSHClient("nfs-server", 22, "root", "password")
           for zone in self.json_config.zones:
                for pod in zone.pods:
                   for cluster in pod.clusters:
@@ -230,31 +249,35 @@ class hostImager():
                        continue
                     for sstor in zone.secondaryStorages:
                            path = urlparse.urlsplit(sstor.url).path
+                           relativePath=path.replace(path.split("/")[1],self.mountPt)
+                           #mount secondary storage on ms.
+                           mount=bash("mount -t nfs %s %s"%("/".join(sstor.url.replace("nfs://","").split("/")[:2]),self.mountPt))
+                           if(not mount.isSuccess()):
+                             self.logger.error("failed to mount %s"%sstor)
                            if(hypervisor=='xen'):
-                               if(ssh.execute("mkdir -p  %s/template/tmpl/1/5/"%path)!=0):
+                               if(not bash("mkdir -p  %s/template/tmpl/1/5/"%relativePath).isSuccess()):
                                    self.logger.error("failed to create directory on nfs-server %s"%"".join(ssh.errorlog))
-                               if(ssh.execute("cp -f /export/BUILTIN/XEN/* %s/template/tmpl/1/5/."%path)!=0):
+                               if(not bash("cp -f %s/automation/BUILTIN/XEN/* %s/template/tmpl/1/5/."%(self.mountPt,relativePath)).isSuccess()):
                                    self.logger.error("failed to copy builtin template %s"%"".join(ssh.errorlog))
                            if(hypervisor=='kvm'):
-                               if(ssh.execute("mkdir -p %s/template/tmpl/1/4/"%path)!=0):
+                               if(not bash("mkdir -p %s/template/tmpl/1/4/"%relativePath).isSuccess()):
                                    self.logger.error("failed to create directory on nfs-server %s"%"".join(ssh.errorlog))
-                               if(ssh.execute("cp -f /export/BUILTIN/KVM/* %s/template/tmpl/1/4/."%path)!=0):
+                               if(bash("cp -f %s/automation/BUILTIN/KVM/* %s/template/tmpl/1/4/."%(self.mountPt,relativePath)).isSuccess()):
                                    self.logger.error("failed to copy builtin template %s"%"".join(ssh.errorlog))
-          ssh.close()
-      
+                           bash("umount %s"%self.mountPt)
+
       def mountAndClean(self,host, path):
         """
         Will mount and clear the files on NFS host in the path given. Obviously the
         NFS server should be mountable where this script runs
         """
-        mnt_path = "/tmp/" + ''.join([random.choice(string.ascii_uppercase) for x in xrange(0, 10)])
-        self.mkdirs(mnt_path)
+        self.mkdirs(self.mountPt)
         self.logger.info("cleaning up %s:%s" % (host, path))
-        mnt = bash("mount -t nfs %s:%s %s" % (host, path, mnt_path))
-        erase = bash("rm -rf %s/*" % mnt_path)
-        umnt = bash("umount %s" % mnt_path)
+        mnt = bash("mount -t nfs %s:%s %s" % (host, path, self.mountPt))
+        erase = bash("rm -rf %s/*" % self.mountPt)
+        umnt = bash("umount %s" % self.mountPt)
 
-      
+
       def cleanPrimaryStorage(self,cscfg):
           """
           Clean all the NFS primary stores and prepare them for the next run
@@ -266,9 +289,10 @@ class hostImager():
                              continue;
                         for primaryStorage in cluster.primaryStorages:
                             if urlparse.urlsplit(primaryStorage.url).scheme == "nfs":
-                               self.mkdirs(urlparse.urlsplit(primaryStorage.url).path)
+                               self.createStorageDirs(primaryStorage)
                                self.mountAndClean(urlparse.urlsplit(primaryStorage.url).hostname, urlparse.urlsplit(primaryStorage.url).path)
                                self.logger.info("Cleaned up primary stores")
+
 
       def _isPortOpen(self,hostQueue, port=22):
           """
@@ -297,7 +321,7 @@ class hostImager():
                   channel.close()
           hostQueue.task_done()
 
-      
+
       def waitForHostReady(self,hostlist):
           self.logger.info("Waiting for hosts %s to refresh"%hostlist)
           hostQueue = Queue.Queue()
@@ -309,16 +333,16 @@ class hostImager():
           [hostQueue.put(host) for host in hostlist]
           hostQueue.join()
           self.logger.info("All hosts %s are up"%hostlist)
-       
+
       def checkIfHostsUp(self,hosts):
           self.waitForHostReady(hosts)
           delay(30)
-          # Re-check because ssh connect works soon as post-installation occurs. But 
+          # Re-check because ssh connect works soon as post-installation occurs. But
           # server is rebooted after post-installation. Assuming the server is up is
           # wrong in these cases. To avoid this we will check again before continuing
           # to add the hosts to cloudstack
           self.waitForHostReady(hosts)
-          self.addProxyInfoToHosts()
+          #self.addProxyInfoToHosts()
 
       def imageHosts(self,mgmtHostInfo):
           hosts=[]
@@ -328,7 +352,7 @@ class hostImager():
           self.cleanPrimaryStorage(self.json_config)
           return hosts
 
- 
+
 class resourceManager():
        def __init__(self):
            self.dbHost="localhost"
@@ -337,7 +361,7 @@ class resourceManager():
            self.database="resource_db"
            self.__con = None
            self.logger=logging.getLogger("resourceManager")
-    
+
        def initLogging(logFile=None, lvl=logging.INFO):
          try:
              if logFile is None:
@@ -350,11 +374,11 @@ class resourceManager():
                                 (%(threadName)s) - %(levelname)s - %(message)s'")
          except:
            logging.basicConfig(level=lvl)
- 
+
        def connect(self):
            self.__con = MySQLdb.connect(self.dbHost,self.username, self.passwd, self.database)
            return self.__con is not None
-       
+
        def getDict(self, dbResponse, cur):
            if ( dbResponse and len(dbResponse)):
                  desc=cur.description
@@ -362,7 +386,7 @@ class resourceManager():
                  for value in desc:
                      responseDict.update({value[0]:dbResponse[value[0]]})
                  return responseDict
-           
+
        def getIp(self):
            if self.__con or self.connect():
               cur=self.__con.cursor(MySQLdb.cursors.DictCursor)
@@ -379,10 +403,10 @@ class resourceManager():
               cur.execute("SELECT * FROM `resource_db`.`mac_resource` WHERE state='free'")
               mac=self.getDict(cur.fetchone(),cur)
               if mac!=None:
-                 cur.execute("UPDATE `resource_db`.`mac_resource` SET state='active' where id='%s'"%mac['id']) 
+                 cur.execute("UPDATE `resource_db`.`mac_resource` SET state='active' where id='%s'"%mac['id'])
                  self.__con.commit()
                  return mac['mac']
-       
+
        def  getStaticHostInfo(self,hostname):
            if self.__con or self.connect():
               cur=self.__con.cursor(MySQLdb.cursors.DictCursor)
@@ -391,7 +415,7 @@ class resourceManager():
               hostInfo=self.getDict(cur.fetchone(),cur)
               self.logger.debug("staticHostInfo", hostInfo)
               if hostInfo!=None:
-                 return hostInfo 
+                 return hostInfo
 
        def freeIp(self,ip):
            if self.__con or self.connect():
@@ -404,7 +428,7 @@ class resourceManager():
               cur=self.__con.cursor()
               cur.execute("UPDATE `resource_db`.`mac_resource` SET state='free' where id='%s'"%mac)
               self.logger.debug("freed mac %s"%mac)
-       
+
        def getConfig(self,profile,configName=None):
            if self.__con or self.connect():
               cur=self.__con.cursor(MySQLdb.cursors.DictCursor)
@@ -420,13 +444,13 @@ class resourceManager():
                  self.__con.commit()
                  return config
 
-         
+
        def freeConfig(self,config):
              if self.__con or self.connect():
               cur=self.__con.cursor()
               cur.execute("UPDATE `resource_db`.`static_config` SET state='free' where configfile='%s'"%config)
               self.logger.info("freed config  %s"%config)
- 
+
        def getSystemVMdownloadUrl(self,branch,hypervisor_type):
             if self.__con or self.connect():
                cur=self.__con.cursor(MySQLdb.cursors.DictCursor)
