@@ -128,7 +128,7 @@ def getCSCode(inp_dict):
           message='failed to checkout prno %s'%inp_dict['githubPrno']
           sendError(message)
        os.system("git branch -D master")
-       success=os.system("echo 'git fetch origin master' 1>&2")
+       success=os.system("git fetch origin master")
        if(success !=0):
          sendError("git fetch master failed")
        os.system("git checkout -b master FETCH_HEAD")
